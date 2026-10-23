@@ -1,0 +1,34 @@
+import * as sqlite from './store';
+import * as sqliteAdmin from './admin-reports';
+import * as postgres from './store-pg';
+import { postgresEnabled } from './postgres';
+
+export { InputError } from './store';
+
+export const getAds=async (...args:Parameters<typeof sqlite.getAds>)=>postgresEnabled()?postgres.getAds(...args):sqlite.getAds(...args);
+export const getAd=async (...args:Parameters<typeof sqlite.getAd>)=>postgresEnabled()?postgres.getAd(...args):sqlite.getAd(...args);
+export const getMakerAds=async (...args:Parameters<typeof sqlite.getMakerAds>)=>postgresEnabled()?postgres.getMakerAds(...args):sqlite.getMakerAds(...args);
+export const createAd=async (...args:Parameters<typeof sqlite.createAd>)=>postgresEnabled()?postgres.createAd(...args):sqlite.createAd(...args);
+export const updateAd=async (...args:Parameters<typeof sqlite.updateAd>)=>postgresEnabled()?postgres.updateAd(...args):sqlite.updateAd(...args);
+export const changeAdStatus=async (...args:Parameters<typeof sqlite.changeAdStatus>)=>postgresEnabled()?postgres.changeAdStatus(...args):sqlite.changeAdStatus(...args);
+export const reserveOrder=async (...args:Parameters<typeof sqlite.reserveOrder>)=>postgresEnabled()?postgres.reserveOrder(...args):sqlite.reserveOrder(...args);
+export const listOrders=async (...args:Parameters<typeof sqlite.listOrders>)=>postgresEnabled()?postgres.listOrders(...args):sqlite.listOrders(...args);
+export const listIncomingOrders=async (...args:Parameters<typeof sqlite.listIncomingOrders>)=>postgresEnabled()?postgres.listIncomingOrders(...args):sqlite.listIncomingOrders(...args);
+export const getOrderDetail=async (...args:Parameters<typeof sqlite.getOrderDetail>)=>postgresEnabled()?postgres.getOrderDetail(...args):sqlite.getOrderDetail(...args);
+export const expireReservations=async (...args:Parameters<typeof sqlite.expireReservations>)=>postgresEnabled()?postgres.expireReservations(...args):sqlite.expireReservations(...args);
+export const getOrderSafety=async (...args:Parameters<typeof sqlite.getOrderSafety>)=>postgresEnabled()?postgres.getOrderSafety(...args):sqlite.getOrderSafety(...args);
+export const changeOrderBlock=async (...args:Parameters<typeof sqlite.changeOrderBlock>)=>postgresEnabled()?postgres.changeOrderBlock(...args):sqlite.changeOrderBlock(...args);
+export const reportOrderCounterparty=async (...args:Parameters<typeof sqlite.reportOrderCounterparty>)=>postgresEnabled()?postgres.reportOrderCounterparty(...args):sqlite.reportOrderCounterparty(...args);
+export const getOrderConversation=async (...args:Parameters<typeof sqlite.getOrderConversation>)=>postgresEnabled()?postgres.getOrderConversation(...args):sqlite.getOrderConversation(...args);
+export const postOrderMessage=async (...args:Parameters<typeof sqlite.postOrderMessage>)=>postgresEnabled()?postgres.postOrderMessage(...args):sqlite.postOrderMessage(...args);
+export const respondOrder=async (...args:Parameters<typeof sqlite.respondOrder>)=>postgresEnabled()?postgres.respondOrder(...args):sqlite.respondOrder(...args);
+export const cancelOrder=async (...args:Parameters<typeof sqlite.cancelOrder>)=>postgresEnabled()?postgres.cancelOrder(...args):sqlite.cancelOrder(...args);
+export const createChallenge=async (...args:Parameters<typeof sqlite.createChallenge>)=>postgresEnabled()?postgres.createChallenge(...args):sqlite.createChallenge(...args);
+export const consumeChallenge=async (...args:Parameters<typeof sqlite.consumeChallenge>)=>postgresEnabled()?postgres.consumeChallenge(...args):sqlite.consumeChallenge(...args);
+export const createSession=async (...args:Parameters<typeof sqlite.createSession>)=>postgresEnabled()?postgres.createSession(...args):sqlite.createSession(...args);
+export const getSession=async (...args:Parameters<typeof sqlite.getSession>)=>postgresEnabled()?postgres.getSession(...args):sqlite.getSession(...args);
+export const deleteSession=async (...args:Parameters<typeof sqlite.deleteSession>)=>postgresEnabled()?postgres.deleteSession(...args):sqlite.deleteSession(...args);
+export const pruneSensitiveOrderData=async (...args:Parameters<typeof sqlite.pruneSensitiveOrderData>)=>postgresEnabled()?postgres.pruneSensitiveOrderData(...args):sqlite.pruneSensitiveOrderData(...args);
+export const listAdminReports=async (...args:Parameters<typeof sqliteAdmin.listAdminReports>)=>postgresEnabled()?postgres.listAdminReports(...args):sqliteAdmin.listAdminReports(...args);
+export const getAdminReport=async (...args:Parameters<typeof sqliteAdmin.getAdminReport>)=>postgresEnabled()?postgres.getAdminReport(...args):sqliteAdmin.getAdminReport(...args);
+export const reviewAdminReport=async (...args:Parameters<typeof sqliteAdmin.reviewAdminReport>)=>postgresEnabled()?postgres.reviewAdminReport(...args):sqliteAdmin.reviewAdminReport(...args);
