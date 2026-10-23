@@ -9,7 +9,7 @@
 - 자산 수량은 `numeric(78,0)`으로 저장하고 PostgreSQL 드라이버에서 문자열로 읽어 `BigInt`로 변환한다. 시각은 현재 API와 맞추기 위해 Unix 밀리초 `bigint`, 약정 JSON은 현재 직렬화 형식의 `text`로 둔다.
 - 광고 예약 시 **하나의 PostgreSQL 트랜잭션**에서 기존 `(taker, idempotency_key)` 주문을 먼저 확인하고, 광고 조건과 수량을 검증한 뒤 `UPDATE p2p.ads SET available_units=available_units-$1, version=version+1 WHERE id=$2 AND status='ACTIVE' AND available_units >= $1 RETURNING ...`으로 재고를 차감하고 주문·이력을 삽입한다. 주문 삽입이 실패하면 재고 차감도 롤백해야 한다. DB의 재고 범위 제약과 요청 키 UNIQUE는 마지막 안전장치다.
 - 새 프로젝트에는 Supabase 마이그레이션으로 스키마를 적용한다. 기존 SQLite 데모 데이터를 옮기려면 별도 검증·이전 절차가 필요하며 이 SQL 파일만 적용해서는 데이터가 이동하지 않는다. 새 PostgreSQL DB에는 데모 광고를 자동으로 넣지 않는다.
-- 서버 연결은 `DATABASE_URL`로 선택한다. 연결은 Node `pg` 풀에서 만들고 기본 풀 크기는 프로세스당 5개(`P2P_PG_POOL_MAX`는 1~20)다. Supabase가 제공하는 서버용 PostgreSQL 연결 문자열을 사용하고 외부 연결에는 TLS를 요구하는 URL을 선택한다. `/api/health`는 DB 연결과 `p2p.ads` 스키마 존재 여부를 확인한다.
+- 서버 연결은 `DATABASE_URL`로 선택한다. 연결은 Node `pg` 풀에서 만들고 기본 풀 크기는 프로세스당 5개(`P2P_PG_POOL_MAX`는 1~20)다. Supabase가 제공하는 서버용 PostgreSQL 연결 문자열을 사용하며, Supabase 호스트에는 인증서 검증이 포함된 TLS(`sslmode=verify-full`)를 강제한다. `/api/health`는 DB 연결과 `p2p.ads` 스키마 존재 여부를 확인한다.
 
 로컬에서는 Docker와 다음 명령으로 스키마 및 동시 재고 차감 검증을 재현할 수 있다.
 

@@ -18,7 +18,9 @@ export function postgresPool() {
   if(!connectionString) throw new Error('Supabase PostgreSQL 연결 문자열 DATABASE_URL이 필요합니다.');
   const max=Number(process.env.P2P_PG_POOL_MAX??5);
   if(!Number.isSafeInteger(max)||max<1||max>20) throw new Error('P2P_PG_POOL_MAX는 1~20이어야 합니다.');
-  pool=new Pool({connectionString,max,connectionTimeoutMillis:5000,idleTimeoutMillis:30000});
+  const url=new URL(connectionString);
+  if(url.hostname.endsWith('.supabase.co')||url.hostname.endsWith('.pooler.supabase.com')) url.searchParams.set('sslmode','verify-full');
+  pool=new Pool({connectionString:url.toString(),max,connectionTimeoutMillis:5000,idleTimeoutMillis:30000});
   return pool;
 }
 export type Queryable=Pick<PoolClient,'query'>;
