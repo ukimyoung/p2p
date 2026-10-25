@@ -17,6 +17,6 @@ Vercel 운영 설정은 [배포 문서](docs/supabase-vercel.md)에 있습니다
 
 ## 검증
 
-`npm test`는 도메인 규칙을, `npm run test:postgres-api`는 Docker PostgreSQL에서 이메일 가입·인증·로그인, 광고·예약·신고, 두 웹 서버의 재고 경합을 검증합니다. `npm run build`와 `npm run typecheck`로 빌드와 타입을 확인합니다.
+`npm test`는 도메인 규칙을, `npm run test:postgres-api`는 Docker PostgreSQL에서 이메일 가입·인증·로그인, 광고·예약·신고, 두 웹 서버의 재고 경합을 검증합니다. `npm run test:browser`는 로그인 전 GNB, 언어 전환, 필수 가입 필드를 브라우저에서 확인합니다. `npm run build`와 `npm run typecheck`로 빌드와 타입을 확인합니다.
 
 기존 로컬 체인 실험 코드는 연구용 파일로 남아 있지만 웹 서비스의 지갑 연결·체인 API는 제거했습니다.
