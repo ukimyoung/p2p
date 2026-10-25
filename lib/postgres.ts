@@ -1,4 +1,5 @@
 import pg, { type PoolClient, type QueryResultRow } from 'pg';
+import { supabaseRootCAs } from './supabase-ca';
 
 const { Pool, types }=pg;
 types.setTypeParser(20,value=>{
@@ -19,8 +20,14 @@ export function postgresPool() {
   const max=Number(process.env.P2P_PG_POOL_MAX??(process.env.VERCEL?1:5));
   if(!Number.isSafeInteger(max)||max<1||max>20) throw new Error('P2P_PG_POOL_MAX는 1~20이어야 합니다.');
   const url=new URL(connectionString);
-  if(url.hostname.endsWith('.supabase.co')||url.hostname.endsWith('.pooler.supabase.com')) url.searchParams.set('sslmode','verify-full');
-  pool=new Pool({connectionString:url.toString(),max,connectionTimeoutMillis:5000,idleTimeoutMillis:30000});
+  const supabaseHost=url.hostname.endsWith('.supabase.co')||url.hostname.endsWith('.pooler.supabase.com');
+  if(supabaseHost) {
+    // pg-connection-string replaces an explicit ssl object when SSL URL parameters exist.
+    for(const key of ['ssl','sslmode','sslrootcert','sslcert','sslkey','sslnegotiation','uselibpqcompat']) url.searchParams.delete(key);
+  }
+  pool=new Pool({connectionString:url.toString(),max,connectionTimeoutMillis:5000,idleTimeoutMillis:30000,
+    ...(supabaseHost?{ssl:{ca:supabaseRootCAs,rejectUnauthorized:true,servername:url.hostname}}:{}),
+  });
   return pool;
 }
 export type Queryable=Pick<PoolClient,'query'>;

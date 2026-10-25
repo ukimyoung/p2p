@@ -5,7 +5,7 @@
 ## Vercel 구성
 
 - 이 저장소는 Next.js 앱으로 가져온다. Root Directory는 저장소 루트이며 빌드 명령은 `npm run build`다. Node.js 24를 사용한다.
-- Production 환경 변수 `DATABASE_URL`에 Supabase의 **서버 전용 PostgreSQL 연결 문자열**을 넣는다. Vercel의 여러 함수 인스턴스가 같은 DB를 사용해야 하므로 서버리스 연결에 적합한 Supabase 풀러를 사용한다. 브라우저 공개 키나 Supabase 서비스 역할 키로 대체하지 않는다. Supabase 호스트 연결은 TLS 인증서 검증을 강제하며, Vercel에서는 함수 인스턴스당 PostgreSQL 풀 연결을 기본 1개로 제한한다.
+- Production 환경 변수 `DATABASE_URL`에 Supabase의 **서버 전용 PostgreSQL 연결 문자열**을 넣는다. Vercel의 여러 함수 인스턴스가 같은 DB를 사용해야 하므로 서버리스 연결에 적합한 Supabase 풀러를 사용한다. 브라우저 공개 키나 Supabase 서비스 역할 키로 대체하지 않는다. Supabase 호스트 연결은 공식 Supabase 생산 환경 루트 CA(2021·2025)와 서버 호스트명으로 TLS 인증서를 검증하며, Vercel에서는 함수 인스턴스당 PostgreSQL 풀 연결을 기본 1개로 제한한다.
 - Production 환경 변수 `CRON_SECRET`에 추측하기 어려운 임의 값을 넣는다. Vercel Cron은 이 값을 `Authorization: Bearer ...` 헤더로 보내며, 두 작업 경로는 값이 없거나 일치하지 않으면 실행하지 않는다. 토큰과 연결 문자열을 Git이나 채팅에 넣지 않는다.
 - `P2P_ADMIN_ADDRESSES`는 관리자 신고 화면을 사용할 때만 웹 서비스에 설정한다. `P2P_REQUIRE_POSTGRES`는 Vercel에서 자동으로 적용되며, `DATABASE_URL`이 빠지면 SQLite 파일로 전환하지 않고 실패한다.
 - Vercel Cron은 상시 실행 프로세스가 아니다. `/api/cron/expire`가 예약·광고 만료를, `/api/cron/retention`이 오래된 대화·신고 내용을 정리한다. `vercel.json`은 Hobby에서도 배포할 수 있도록 두 작업을 각각 매일 03:00·03:05 UTC(한국 시간 12:00·12:05)에 예약한다. Hobby의 실제 호출 시각은 해당 시간대 안에서 달라질 수 있다. 만료 처리는 사용자 요청에서도 즉시 수행되지만, 접속이 없는 동안 DB 상태 갱신은 다음 일일 Cron까지 지연될 수 있다. 짧은 주기의 무요청 만료가 필요하면 Vercel Pro의 Cron 빈도 제한과 비용을 확인한 뒤 만료 작업을 1분 주기로 바꾼다.
