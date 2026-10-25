@@ -112,8 +112,38 @@ async function main() {
 
     const webPort=await freePort();
     const base=`http://127.0.0.1:${webPort}`;
-    const web=start(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(webPort)],{...process.env,NEXT_TELEMETRY_DISABLED:'1',P2P_ADMIN_ADDRESSES:'0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'});
+    const cronSecret='local-cron-test-secret';
+    const web=start(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(webPort)],{...process.env,NEXT_TELEMETRY_DISABLED:'1',CRON_SECRET:cronSecret,P2P_ADMIN_ADDRESSES:'0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'});
     await until(async()=>{const response=await fetch(base+'/api/health');return response.status===200;},'Next.js 웹 서버',web.logs);
+
+    const cronAd=await createAd('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',terms);
+    const cronOrder=await reserveOrder('0xffffffffffffffffffffffffffffffffffffffff',cronAd.id,'100','pg-cron-expiry-key-123456');
+    await query('UPDATE p2p.orders SET response_due_at=$1 WHERE id=$2',[Date.now()-1000,cronOrder.id]);
+    for(const authorization of [undefined,'Bearer invalid']) {
+      const denied=await fetch(base+'/api/cron/expire',{headers:authorization?{Authorization:authorization}:undefined});
+      assert.equal(denied.status,401);
+    }
+    assert.equal((await query<{state:string}>('SELECT state FROM p2p.orders WHERE id=$1',[cronOrder.id])).rows[0].state,'RESERVED');
+    const cronHeaders={Authorization:`Bearer ${cronSecret}`};
+    const expiredByCron=await fetch(base+'/api/cron/expire',{headers:cronHeaders});
+    assert.equal(expiredByCron.status,200,await expiredByCron.text());
+    assert.equal((await query<{state:string}>('SELECT state FROM p2p.orders WHERE id=$1',[cronOrder.id])).rows[0].state,'EXPIRED');
+    assert.equal((await query<{available_units:string}>('SELECT available_units FROM p2p.ads WHERE id=$1',[cronAd.id])).rows[0].available_units,'1000000000000000000');
+    assert.equal((await query<{count:number}>("SELECT count(*) AS count FROM p2p.order_events WHERE order_id=$1 AND state='EXPIRED'",[cronOrder.id])).rows[0].count,1);
+
+    const cronRetained=await createAd('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',terms);
+    const cronRetainedOrder=await reserveOrder('0xffffffffffffffffffffffffffffffffffffffff',cronRetained.id,'100','pg-cron-retention-key-123456');
+    await cancelOrder('0xffffffffffffffffffffffffffffffffffffffff',cronRetainedOrder.id);
+    await query("UPDATE p2p.order_events SET occurred_at=$1 WHERE order_id=$2 AND state='CANCELLED'",[endedAt,cronRetainedOrder.id]);
+    await query('INSERT INTO p2p.order_messages (order_id,sender,client_id,body,created_at) VALUES ($1,$2,$3,$4,$5)',[cronRetainedOrder.id,'0xffffffffffffffffffffffffffffffffffffffff',randomUUID(),'old message',endedAt]);
+    await query('INSERT INTO p2p.order_reports (id,order_id,reporter,reported,reason,details,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',[randomUUID(),cronRetainedOrder.id,'0xffffffffffffffffffffffffffffffffffffffff','0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','OTHER','old report details',endedAt]);
+    assert.equal((await fetch(base+'/api/cron/retention')).status,401);
+    const prunedByCron=await fetch(base+'/api/cron/retention',{headers:cronHeaders});
+    assert.equal(prunedByCron.status,200);
+    assert.deepEqual((await prunedByCron.json()).removed,{messages:1,reports:1});
+    assert.equal((await query<{count:number}>('SELECT count(*) AS count FROM p2p.order_messages WHERE order_id=$1',[cronRetainedOrder.id])).rows[0].count,0);
+    assert.equal((await query<{count:number}>('SELECT count(*) AS count FROM p2p.order_reports WHERE order_id=$1',[cronRetainedOrder.id])).rows[0].count,0);
+
     const smokeEnv={...process.env,P2P_TEST_BASE_URL:base};
     for(const script of ['tests/admin-api-smoke.ts','tests/api-smoke.ts']) {
       const result=spawnSync(process.execPath,['node_modules/tsx/dist/cli.mjs',script],{cwd:process.cwd(),env:smokeEnv,encoding:'utf8',timeout:60_000});

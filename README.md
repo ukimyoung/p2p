@@ -1,6 +1,6 @@
 # Peer — Crypto P2P Marketplace
 
-Supabase PostgreSQL·Render 배포 전환의 현재 상태와 순서는 [Supabase/Render 전환 문서](docs/supabase-render.md)에 정리했습니다. `DATABASE_URL`을 지정하면 웹 API와 예약 만료 작업이 PostgreSQL을 사용합니다. Supabase 프로젝트에는 초기 스키마를 적용했으며, [Render Blueprint](render.yaml)의 웹·예약 만료 워커·보존 정리 서비스는 아직 생성하지 않았습니다.
+Supabase PostgreSQL·Vercel 배포 전환의 현재 상태와 순서는 [Supabase/Vercel 배포 문서](docs/supabase-vercel.md)에 정리했습니다. `DATABASE_URL`을 지정하면 웹 API와 예약 만료 작업이 PostgreSQL을 사용합니다. Supabase 프로젝트에는 초기 스키마를 적용했으며, Vercel 배포는 아직 진행하지 않았습니다.
 
 암호화폐 전용 P2P 웹서비스의 개발 프리뷰입니다. PRD를 기반으로 광고 탐색·관리, SIWE 지갑 로그인, 데모 주문 예약과 광고주의 수락·거절, 주문 상태 이력·주문별 대화·신고·차단을 구현했습니다. 광고와 가격은 예시이며 일반 데모 예약은 자산을 이동하지 않습니다. 평판·후기는 MVP 범위에서 제외했습니다.
 

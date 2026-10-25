@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 
 const databasePath=process.env.P2P_DB_PATH;
-if(process.env.DATABASE_URL) throw new Error('PostgreSQL 배포에서는 예약 만료 작업을 Render Background Worker로 별도 실행하세요.');
+if(process.env.DATABASE_URL) throw new Error('PostgreSQL 배포에서는 예약 만료 작업을 배포 환경의 스케줄러로 별도 실행하세요.');
 if(!databasePath||!existsSync(databasePath)) throw new Error('기존 SQLite DB 경로를 P2P_DB_PATH로 지정하세요.');
 const required=['P2P_CHAIN_RPC_URL','P2P_CHAIN_ID','P2P_ESCROW_ADDRESS','P2P_USDC_ADDRESS','P2P_WETH_ADDRESS','P2P_CHAIN_START_BLOCK'];
 if(required.some(key=>!process.env[key])) throw new Error('로컬 체인 설정이 완전하지 않습니다.');

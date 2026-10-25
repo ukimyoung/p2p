@@ -9,14 +9,14 @@ types.setTypeParser(20,value=>{
 
 let pool:pg.Pool|undefined;
 export function postgresEnabled() {
-  if(!process.env.DATABASE_URL&&process.env.P2P_REQUIRE_POSTGRES==='true') throw new Error('PostgreSQL 배포에는 DATABASE_URL이 필요합니다.');
+  if(!process.env.DATABASE_URL&&(process.env.P2P_REQUIRE_POSTGRES==='true'||process.env.VERCEL)) throw new Error('PostgreSQL 배포에는 DATABASE_URL이 필요합니다.');
   return !!process.env.DATABASE_URL;
 }
 export function postgresPool() {
   if(pool) return pool;
   const connectionString=process.env.DATABASE_URL;
   if(!connectionString) throw new Error('Supabase PostgreSQL 연결 문자열 DATABASE_URL이 필요합니다.');
-  const max=Number(process.env.P2P_PG_POOL_MAX??5);
+  const max=Number(process.env.P2P_PG_POOL_MAX??(process.env.VERCEL?1:5));
   if(!Number.isSafeInteger(max)||max<1||max>20) throw new Error('P2P_PG_POOL_MAX는 1~20이어야 합니다.');
   const url=new URL(connectionString);
   if(url.hostname.endsWith('.supabase.co')||url.hostname.endsWith('.pooler.supabase.com')) url.searchParams.set('sslmode','verify-full');

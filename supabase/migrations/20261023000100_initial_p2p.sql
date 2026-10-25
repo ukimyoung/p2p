@@ -1,6 +1,6 @@
 -- Server-side tables only. Do not expose the p2p schema through the Supabase Data API.
--- Apply with a privileged migration connection before creating Render services.
--- All Render services must use the same private PostgreSQL connection string.
+-- Apply with a privileged migration connection before deploying the web service.
+-- All server functions and scheduled jobs must use the same private PostgreSQL database.
 CREATE SCHEMA IF NOT EXISTS p2p;
 REVOKE ALL ON SCHEMA p2p FROM PUBLIC;
 
