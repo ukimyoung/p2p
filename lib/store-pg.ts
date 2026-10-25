@@ -78,7 +78,7 @@ export async function getMakerAds(address:string) {await expireReservations();re
 export async function createAd(address:string,input:unknown) {
   const terms=validateAdTerms(input);
   const id=randomUUID();
-  const maker=`${address.slice(0,6)}…${address.slice(-4)}`;
+  const maker=`Member ${address.slice(0,8)}`;
   const now=Date.now();
   const ad=await row<AdRow>("INSERT INTO p2p.ads (id,maker,maker_address,initials,side,asset,price,available_units,total_units,min,max,minutes,created_at,expires_at) VALUES ($1,$2,$3,'ME',$4,$5,$6,$7,$7,$8,$9,$10,$11,$12) RETURNING *",[id,maker,address,terms.side,terms.asset,terms.price,terms.totalUnits.toString(),terms.min,terms.max,terms.minutes,now,now+terms.validHours*60*60_000]);
   return publicAd(ad);
@@ -188,7 +188,7 @@ async function safetyTarget(client:Queryable,address:string,id:string) {
   const targetRow=await row<{taker:string;maker_address:string|null}>('SELECT o.taker,a.maker_address FROM p2p.orders o JOIN p2p.ads a ON a.id=o.ad_id WHERE o.id=$1 AND (o.taker=$2 OR a.maker_address=$2)',[id,address],client);
   if(!targetRow) throw new InputError('주문을 찾을 수 없습니다.',404);
   const target=targetRow.taker.toLowerCase()===address.toLowerCase()?targetRow.maker_address:targetRow.taker;
-  if(!target) throw new InputError('연결된 상대방 지갑이 없습니다.',409);
+  if(!target) throw new InputError('연결된 상대방 계정이 없습니다.',409);
   return target.toLowerCase();
 }
 async function lockOrder(client:Queryable,id:string) {

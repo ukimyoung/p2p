@@ -1,5 +1,6 @@
 'use client';
 import { FormEvent, useEffect, useState } from 'react';
+import { useLanguage } from './language-provider';
 
 type Report={id:string;reason:string;details:string;status:string;created_at:number;reviewed_at?:number|null};
 type Safety={target:string;blocked:boolean;report:Report|null;reportable:boolean};
@@ -7,6 +8,7 @@ const reasons:Record<string,string>={SPAM:'스팸',FRAUD:'사기 의심',IMPERSO
 const reviewLabels:Record<string,string>={PENDING:'검토 대기',CONFIRMED:'확인됨',DISMISSED:'기각'};
 
 export default function OrderSafety({id,onAdsChanged}:{id:string;onAdsChanged:()=>Promise<void>}) {
+  const {t,language,locale}=useLanguage();
   const [open,setOpen]=useState(false);
   const [safety,setSafety]=useState<Safety|null>(null);
   const [unavailable,setUnavailable]=useState(false);
@@ -50,14 +52,14 @@ export default function OrderSafety({id,onAdsChanged}:{id:string;onAdsChanged:()
       setSafety(current=>current?{...current,report:data.report}:current);
     } catch(cause) {setError((cause as Error).message);} finally {setBusy(false);}
   }
-  return <section className="order-safety" aria-label="주문 신고와 차단"><button className="safety-toggle" onClick={()=>setOpen(value=>!value)}>{open?'신고·차단 닫기':'신고·차단'}</button>{open&&<div className="safety-content">
+  return <section className="order-safety" aria-label={t('주문 신고와 차단','Report and block')}><button className="safety-toggle" onClick={()=>setOpen(value=>!value)}>{open?t('신고·차단 닫기','Close report panel'):t('신고·차단','Report / Block')}</button>{open&&<div className="safety-content">
     {error&&<p className="error" role="alert">{error}</p>}
-    {unavailable?<p>연결된 상대방 지갑이 없는 예시 주문입니다.</p>:!safety?<p>상태를 불러오는 중입니다.</p>:<>
-      <p>상대방 {safety.target.slice(0,6)}…{safety.target.slice(-4)}</p>
-      <p>차단하면 서로의 새 광고 예약을 막습니다. 기존 주문의 대화·상태 조회·자산 회수는 유지됩니다.</p>
-      <button disabled={busy} onClick={()=>void toggleBlock()}>{safety.blocked?'차단 해제':'상대방 차단'}</button>
-      {safety.report?<p role="status">신고 접수됨 · {reviewLabels[safety.report.status]||safety.report.status} · {reasons[safety.report.reason]||safety.report.reason} · {new Date(safety.report.created_at).toLocaleString('ko-KR')}</p>:safety.reportable?<form onSubmit={event=>void report(event)}><label>신고 사유<select value={reason} onChange={event=>setReason(event.target.value)}>{Object.entries(reasons).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>신고 내용<textarea value={details} minLength={10} maxLength={1000} rows={3} onChange={event=>setDetails(event.target.value)} placeholder="구체적인 상황을 10자 이상 적어주세요"/></label><button type="submit" disabled={busy||details.trim().length<10}>신고 접수</button></form>:<p>주문 종료 후 30일이 지나 신고 접수가 마감되었습니다.</p>}
-      <p className="safety-note">개발 프리뷰는 신고 심사 결과를 표시하고 주문 종료 180일 후 삭제합니다. 심사 결과로 자동 제재하지 않습니다.</p>
+    {unavailable?<p>{t('연결된 상대방 계정이 없는 예시 주문입니다.','This sample order has no counterparty account.')}</p>:!safety?<p>{t('상태를 불러오는 중입니다.','Loading status.')}</p>:<>
+      <p>{t('상대방','Counterparty')} {safety.target.slice(0,8)}</p>
+      <p>{t('차단하면 서로의 새 광고 예약을 막습니다. 기존 주문의 대화와 상태 조회는 유지됩니다.','Blocking prevents new reservations between you. Existing order chats and status remain available.')}</p>
+      <button disabled={busy} onClick={()=>void toggleBlock()}>{safety.blocked?t('차단 해제','Unblock'):t('상대방 차단','Block user')}</button>
+      {safety.report?<p role="status">{t('신고 접수됨','Report submitted')} · {language==='ko'?(reviewLabels[safety.report.status]||safety.report.status):({PENDING:'Pending',CONFIRMED:'Confirmed',DISMISSED:'Dismissed'}[safety.report.status]||safety.report.status)} · {language==='ko'?(reasons[safety.report.reason]||safety.report.reason):({SPAM:'Spam',FRAUD:'Suspected fraud',IMPERSONATION:'Impersonation',OTHER:'Other'}[safety.report.reason]||safety.report.reason)} · {new Date(safety.report.created_at).toLocaleString(locale)}</p>:safety.reportable?<form onSubmit={event=>void report(event)}><label>{t('신고 사유','Reason')}<select value={reason} onChange={event=>setReason(event.target.value)}>{Object.entries(reasons).map(([value,label])=><option key={value} value={value}>{language==='ko'?label:({SPAM:'Spam',FRAUD:'Suspected fraud',IMPERSONATION:'Impersonation',OTHER:'Other'}[value])}</option>)}</select></label><label>{t('신고 내용','Details')}<textarea value={details} minLength={10} maxLength={1000} rows={3} onChange={event=>setDetails(event.target.value)} placeholder={t('구체적인 상황을 10자 이상 적어주세요','Describe the situation in at least 10 characters')}/></label><button type="submit" disabled={busy||details.trim().length<10}>{t('신고 접수','Submit report')}</button></form>:<p>{t('신고 접수 기간이 지났습니다.','The reporting window has closed.')}</p>}
+      <p className="safety-note">{t('신고는 주문 종료 180일 후 삭제합니다. 심사 결과로 자동 제재하지 않습니다.','Reports are deleted 180 days after an order closes. Reviews do not automatically sanction accounts.')}</p>
     </>}
   </div>}</section>;
 }

@@ -1,35 +1,20 @@
 import assert from 'node:assert/strict';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { randomUUID } from 'node:crypto';
+import { createSession } from '../lib/store-pg';
+import { query } from '../lib/postgres';
+async function testMember() {
+  const id=randomUUID();
+  await query('INSERT INTO p2p.member_profiles (user_id,email,country_code,phone_e164,email_verified_at) VALUES ($1,$2,$3,$4,$5)',[id,`${id}@example.test`,'KR','+821012345678',Date.now()]);
+  return {id,cookie:`peer_session=${await createSession(id)}`};
+}
 async function main() {
 const base=process.env.P2P_TEST_BASE_URL || 'http://localhost:3010';
-const account=privateKeyToAccount(generatePrivateKey());
+const account=await testMember();
 const post=async(path:string,body:unknown,opts:{cookie?:string,key?:string,origin?:string}={})=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json','Origin':opts.origin||base,...(opts.cookie?{'Cookie':opts.cookie}:{}),...(opts.key?{'Idempotency-Key':opts.key}:{})},body:JSON.stringify(body)});
 const patch=async(path:string,body:unknown,cookie:string)=>fetch(base+path,{method:'PATCH',headers:{'Content-Type':'application/json','Origin':base,'Cookie':cookie},body:JSON.stringify(body)});
-async function loginWallet(wallet:ReturnType<typeof privateKeyToAccount>) {
-  const challenge=await post('/api/v1/auth/challenge',{address:wallet.address,chainId:11155111});
-  assert.equal(challenge.status,200);
-  const {message}=await challenge.json();
-  const signature=await wallet.signMessage({message});
-  const login=await post('/api/v1/auth/verify',{message,signature});
-  assert.equal(login.status,200);
-  const cookie=login.headers.get('set-cookie')?.split(';')[0];
-  assert.ok(cookie);
-  assert.ok(cookie.startsWith('peer_session='));
-  return cookie;
-}
-const challenge=await post('/api/v1/auth/challenge',{address:account.address,chainId:11155111});
-assert.equal(challenge.status,200);
-const {message}=await challenge.json();
-assert.match(message,/Sign in to Peer development preview/);
-const signature=await account.signMessage({message});
-const invalidOrigin=await post('/api/v1/auth/verify',{message,signature},{origin:'https://attacker.example'});
-assert.equal(invalidOrigin.status,403);
-const login=await post('/api/v1/auth/verify',{message,signature});
-assert.equal(login.status,200);
-const cookie=login.headers.get('set-cookie')?.split(';')[0];
-assert.ok(cookie?.startsWith('peer_session='));
-const replay=await post('/api/v1/auth/verify',{message,signature});
-assert.equal(replay.status,401);
+const cookie=account.cookie;
+assert.equal((await fetch(base+'/api/v1/auth/me',{headers:{Cookie:cookie}})).status,200);
+assert.equal((await post('/api/v1/auth/login',{email:'bad@example.test',password:'password123'},{origin:'https://attacker.example'})).status,403);
 const denied=await post('/api/v1/orders',{adId:'eth-01',amount:'100'});
 assert.equal(denied.status,401);
 const before=await (await fetch(base+'/api/v1/ads')).json();
@@ -57,12 +42,12 @@ const adInput={side:'buy',asset:'ETH',price:'2500',total:'1',min:'100',max:'1500
 const adCreated=await post('/api/v1/ads',adInput,{cookie});
 assert.equal(adCreated.status,201);
 const ad=(await adCreated.json()).ad;
-assert.equal(ad.makerAddress,account.address);
+assert.equal(ad.makerAddress,account.id);
 const owned=await fetch(base+'/api/v1/me/ads',{headers:{Cookie:cookie!}});
 assert.ok((await owned.json()).ads.some((item:{id:string})=>item.id===ad.id));
 assert.equal((await post('/api/v1/orders',{adId:ad.id,amount:'1000'},{cookie,key:'self-reservation-'+crypto.randomUUID()})).status,403);
-const second=privateKeyToAccount(generatePrivateKey());
-const secondCookie=await loginWallet(second);
+const second=await testMember();
+const secondCookie=second.cookie;
 assert.equal((await patch(`/api/v1/ads/${ad.id}`,{...adInput,expectedVersion:ad.version},secondCookie)).status,404);
 const otherOrderResponse=await post('/api/v1/orders',{adId:ad.id,amount:'1000'},{cookie:secondCookie,key:'maker-test-'+crypto.randomUUID()});
 assert.equal(otherOrderResponse.status,201);
@@ -79,7 +64,7 @@ const detail=await fetch(base+`/api/v1/orders/${otherOrder.id}`,{headers:{Cookie
 assert.deepEqual((await detail.json()).events.map((event:{state:string})=>event.state),['RESERVED','ACCEPTED']);
 const chatPath=`/api/v1/orders/${otherOrder.id}/messages`;
 assert.equal((await fetch(base+chatPath)).status,401);
-const outsiderCookie=await loginWallet(privateKeyToAccount(generatePrivateKey()));
+const outsiderCookie=(await testMember()).cookie;
 assert.equal((await fetch(base+chatPath,{headers:{Cookie:outsiderCookie}})).status,404);
 assert.equal((await post(chatPath,{body:'무단 메시지',clientId:crypto.randomUUID()},{cookie:outsiderCookie})).status,404);
 const chatId=crypto.randomUUID();

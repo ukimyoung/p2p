@@ -3,15 +3,18 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { createServer as createHttpServer, type Server as HttpServer } from 'node:http';
 import { resolve } from 'node:path';
 import { closePostgres, query } from '../lib/postgres';
 import { cancelOrder, createAd, createSession, reserveOrder } from '../lib/store-pg';
 
 const name=`p2p-pg-api-${process.pid}-${randomBytes(3).toString('hex')}`;
 const migration=readFileSync(resolve('supabase/migrations/20261023000100_initial_p2p.sql'),'utf8');
+const memberMigration=readFileSync(resolve('supabase/migrations/20261025000100_member_profiles.sql'),'utf8');
 const password='local-test-only';
 const children:ChildProcess[]=[];
 let started=false;
+let authServer:HttpServer|undefined;
 
 function docker(args:string[],input?:string) {
   const result=spawnSync('docker',args,{encoding:'utf8',input,maxBuffer:1024*1024});
@@ -60,6 +63,7 @@ async function main() {
       return (logs.stdout+logs.stderr).includes('PostgreSQL init process complete')&&probe.status===0;
     },'PostgreSQL 시작');
     docker(['exec','-i',name,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d','p2p'],migration);
+    docker(['exec','-i',name,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','postgres','-d','p2p'],memberMigration);
     const address=docker(['port',name,'5432/tcp']).split('\n')[0];
     const port=Number(address.slice(address.lastIndexOf(':')+1));
     assert.ok(Number.isInteger(port)&&port>0);
@@ -112,9 +116,51 @@ async function main() {
 
     const webPort=await freePort();
     const base=`http://127.0.0.1:${webPort}`;
+    const authPort=await freePort();
+    const authBase=`http://127.0.0.1:${authPort}`;
+    const authUser={id:randomUUID(),email:'new-member@example.test',email_confirmed_at:null as string|null,user_metadata:{} as Record<string,string>};
+    let signupCalls=0;
+    authServer=createHttpServer(async(request,response)=>{
+      const chunks:Buffer[]=[];for await(const chunk of request)chunks.push(chunk as Buffer);
+      const body=chunks.length?JSON.parse(Buffer.concat(chunks).toString()):{};
+      response.setHeader('Content-Type','application/json');
+      if(request.url?.startsWith('/auth/v1/signup')&&request.method==='POST'){
+        signupCalls++;authUser.email=body.email;authUser.user_metadata=body.data;
+        response.end(JSON.stringify({user:{id:authUser.id}}));return;
+      }
+      if(request.url?.startsWith('/auth/v1/token')&&request.method==='POST'){
+        if(!authUser.email_confirmed_at){response.statusCode=400;response.end(JSON.stringify({code:'email_not_confirmed'}));return;}
+        response.end(JSON.stringify({user:authUser,access_token:'test-access-token'}));return;
+      }
+      if(request.url==='/auth/v1/user'&&request.headers.authorization==='Bearer test-access-token'){
+        response.end(JSON.stringify(authUser));return;
+      }
+      response.statusCode=401;response.end('{}');
+    });
+    await new Promise<void>(resolve=>authServer!.listen(authPort,'127.0.0.1',resolve));
     const cronSecret='local-cron-test-secret';
-    const web=start(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(webPort)],{...process.env,NEXT_TELEMETRY_DISABLED:'1',CRON_SECRET:cronSecret,P2P_ADMIN_ADDRESSES:'0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'});
+    const web=start(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(webPort)],{...process.env,NEXT_TELEMETRY_DISABLED:'1',CRON_SECRET:cronSecret,SUPABASE_URL:authBase,SUPABASE_PUBLISHABLE_KEY:'test-key',P2P_ADMIN_USER_IDS:'11111111-1111-4111-8111-111111111111'});
     await until(async()=>{const response=await fetch(base+'/api/health');return response.status===200;},'Next.js 웹 서버',web.logs);
+
+    const authPost=(path:string,body:unknown)=>fetch(base+path,{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const validSignup={email:authUser.email,password:'a-good-password-123',countryCode:'KR',phone:'010-1234-5678'};
+    assert.equal((await authPost('/api/v1/auth/signup',{...validSignup,phone:''})).status,400);
+    assert.equal(signupCalls,0);
+    const signup=await authPost('/api/v1/auth/signup',validSignup);
+    assert.equal(signup.status,202,await signup.text());
+    assert.equal(signup.headers.get('set-cookie'),null);
+    assert.equal(authUser.user_metadata.phone_e164,'+821012345678');
+    assert.equal((await authPost('/api/v1/auth/login',{email:authUser.email,password:validSignup.password})).status,403);
+    assert.equal((await authPost('/api/v1/auth/confirm',{accessToken:'test-access-token'})).status,403);
+    assert.equal(Number((await query<{count:string}>('SELECT count(*) AS count FROM p2p.member_profiles')).rows[0].count),0);
+    authUser.email_confirmed_at=new Date().toISOString();
+    const confirmed=await authPost('/api/v1/auth/confirm',{accessToken:'test-access-token'});
+    assert.equal(confirmed.status,200,await confirmed.text());
+    const authCookie=confirmed.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(authCookie?.startsWith('peer_session='));
+    assert.equal((await (await fetch(base+'/api/v1/auth/me',{headers:{Cookie:authCookie!}})).json()).user.email,authUser.email);
+    assert.equal((await authPost('/api/v1/auth/login',{email:authUser.email,password:validSignup.password})).status,200);
+    assert.equal((await fetch(base+'/api/v1/auth/challenge')).status,404);
 
     const cronAd=await createAd('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',terms);
     const cronOrder=await reserveOrder('0xffffffffffffffffffffffffffffffffffffffff',cronAd.id,'100','pg-cron-expiry-key-123456');
@@ -151,11 +197,12 @@ async function main() {
     }
     const secondPort=await freePort();
     const secondBase=`http://127.0.0.1:${secondPort}`;
-    const secondWeb=start(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(secondPort)],{...process.env,NEXT_TELEMETRY_DISABLED:'1',P2P_ADMIN_ADDRESSES:'0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'});
+    const secondWeb=start(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(secondPort)],{...process.env,NEXT_TELEMETRY_DISABLED:'1',SUPABASE_URL:authBase,SUPABASE_PUBLISHABLE_KEY:'test-key',P2P_ADMIN_USER_IDS:'11111111-1111-4111-8111-111111111111'});
     await until(async()=>{const response=await fetch(secondBase+'/api/health');return response.status===200;},'두 번째 웹 서버',secondWeb.logs);
-    const sharedAddress='0xdddddddddddddddddddddddddddddddddddddddd';
+    const sharedAddress=randomUUID();
+    await query('INSERT INTO p2p.member_profiles (user_id,email,country_code,phone_e164,email_verified_at) VALUES ($1,$2,$3,$4,$5)',[sharedAddress,`${sharedAddress}@example.test`,'KR','+821012345678',Date.now()]);
     const sharedCookie=`peer_session=${await createSession(sharedAddress)}`;
-    assert.equal((await (await fetch(secondBase+'/api/v1/auth/me',{headers:{Cookie:sharedCookie}})).json()).address,sharedAddress);
+    assert.equal((await (await fetch(secondBase+'/api/v1/auth/me',{headers:{Cookie:sharedCookie}})).json()).user.id,sharedAddress);
     const sharedAd=await createAd('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',terms);
     const request=(target:string,key:string)=>fetch(target+'/api/v1/orders',{method:'POST',headers:{Origin:target,'Content-Type':'application/json',Cookie:sharedCookie,'Idempotency-Key':key},body:JSON.stringify({adId:sharedAd.id,amount:'2000'})});
     const responses=await Promise.all(Array.from({length:16},(_,index)=>request(index%2?base:secondBase,`cross-web-${index}-${randomUUID()}`)));
@@ -163,11 +210,11 @@ async function main() {
     assert.equal(responses.filter(response=>response.status===409).length,15);
     const sharedStock=await query<{available_units:string}>('SELECT available_units FROM p2p.ads WHERE id=$1',[sharedAd.id]);
     assert.equal(sharedStock.rows[0].available_units,'0');
-    const chain=await fetch(base+'/api/v1/chain/config');
-    assert.equal((await chain.json()).enabled,false);
-    console.log('PASS: PostgreSQL API, 16-way stock race across two web servers, shared SIWE session, same-key idempotency, expiry worker, conversation, reports, admin review.');
+    assert.equal((await fetch(base+'/api/v1/chain/config')).status,404);
+    console.log('PASS: email signup/confirmation, verified sessions, PostgreSQL API, 16-way stock race across two web servers, expiry worker, conversation, reports, admin review.');
   } finally {
     await Promise.all(children.map(stop));
+    if(authServer) await new Promise<void>(resolve=>authServer!.close(()=>resolve()));
     await closePostgres();
     if(started) spawnSync('docker',['rm','-f',name],{encoding:'utf8'});
   }

@@ -29,6 +29,7 @@
     "test:postgres-api": "npm run build && tsx tests/postgres-api-e2e.ts"
   },
   "dependencies": {
+    "libphonenumber-js": "^1.13.15",
     "next": "^16.0.0",
     "pg": "^8.23.1",
     "react": "^19.0.0",

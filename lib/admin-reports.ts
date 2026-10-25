@@ -1,12 +1,12 @@
-import { isAddress } from 'viem';
 import { db, InputError, pruneSensitiveOrderData, transaction } from './store';
 
 type Decision='CONFIRMED'|'DISMISSED';
 type ReportRow={id:string;order_id:string;reporter:string;reported:string;reason:string;details:string;status:string;created_at:number;reviewed_at:number|null;reviewed_by:string|null;review_note:string|null};
 
 export function isReportAdmin(address:string|undefined) {
-  const entries=(process.env.P2P_ADMIN_ADDRESSES||'').split(',').map(value=>value.trim()).filter(Boolean);
-  return !!address&&isAddress(address)&&entries.length>0&&entries.every(value=>isAddress(value))&&entries.some(value=>value.toLowerCase()===address.toLowerCase());
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const entries=(process.env.P2P_ADMIN_USER_IDS||'').split(',').map(value=>value.trim()).filter(Boolean);
+  return !!address&&uuid.test(address)&&entries.length>0&&entries.every(value=>uuid.test(value))&&entries.some(value=>value.toLowerCase()===address.toLowerCase());
 }
 function requireReportAdmin(address:string) {
   if(!isReportAdmin(address)) throw new InputError('운영자 권한이 없습니다.',403);

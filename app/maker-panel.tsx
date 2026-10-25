@@ -1,7 +1,8 @@
 'use client';
 import { FormEvent, useEffect, useState } from 'react';
-import { Ad, Asset, Side, filterOrdersByStatus, OrderStatusFilter, orderStateLabel } from '../lib/market';
-import ChainOrderPanel from './chain-order-panel';
+import { Ad, Asset, Side, filterOrdersByStatus, OrderStatusFilter } from '../lib/market';
+import { stateName } from '../lib/i18n';
+import { useLanguage } from './language-provider';
 import OrderConversation from './order-conversation';
 import OrderSafety from './order-safety';
 import OrderStatusFilterBar from './order-status-filter';
@@ -11,14 +12,14 @@ type Draft={side:Side;asset:Asset;price:string;total:string;min:string;max:strin
 type IncomingOrder={id:string;ad_id:string;taker:string;amount:string;state:string;response_due_at:number|null;expires_at:number;terms_json:string|null};
 const blank=():Draft=>({side:'buy',asset:'ETH',price:'2500',total:'1',min:'100',max:'1000',minutes:'15',validHours:'24'});
 const stateLabel:Record<string,string>={ACTIVE:'진행 중',PAUSED:'일시중지',CLOSED:'종료',EXPIRED:'만료'};
-const chainEligible=(terms:string|null)=>{try{return JSON.parse(terms||'{}').asset==='ETH';}catch{return false;}};
 async function send(path:string,method:'POST'|'PATCH',body:unknown) {
   const response=await fetch(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await response.json();
   if(!response.ok) throw new Error(data.error||'광고 요청에 실패했습니다.');
   return data;
 }
-export default function MakerPanel({wallet,onMarketChanged,onNotice}:{wallet:string,onMarketChanged:()=>Promise<void>,onNotice:(message:string)=>void}) {
+export default function MakerPanel({wallet,registerSignal,onMarketChanged,onNotice}:{wallet:string;registerSignal:number;onMarketChanged:()=>Promise<void>;onNotice:(message:string)=>void}) {
+  const {t,language,locale}=useLanguage();
   const [ads,setAds]=useState<Ad[]>([]);
   const [incoming,setIncoming]=useState<IncomingOrder[]>([]);
   const [orderFilter,setOrderFilter]=useState<OrderStatusFilter>('all');
@@ -29,6 +30,7 @@ export default function MakerPanel({wallet,onMarketChanged,onNotice}:{wallet:str
   const [formOpen,setFormOpen]=useState(false);
   const [saving,setSaving]=useState(false);
   const [loading,setLoading]=useState(true);
+  useEffect(()=>{if(registerSignal>0){setEditing(null);setDraft(blank());setFormOpen(true);}},[registerSignal]);
   async function load() {
     const [adsResponse,ordersResponse]=await Promise.all([
       fetch('/api/v1/me/ads',{cache:'no-store'}),fetch('/api/v1/me/incoming-orders',{cache:'no-store'}),
@@ -74,21 +76,20 @@ export default function MakerPanel({wallet,onMarketChanged,onNotice}:{wallet:str
     catch(error){onNotice((error as Error).message);}
   }
   return <section id="my-ads" className="my-orders my-ads">
-    <div className="section-title"><div><span className="eyebrow">MY DEMO ADS</span><h2>내 데모 광고</h2></div><button className="make-ad" onClick={()=>{setEditing(null);setDraft(blank());setFormOpen(current=>!current);}}>{formOpen?'닫기':'광고 만들기'}</button></div>
-    <p className="maker-caution">데모 광고는 지갑 잔액이나 담보를 확인하지 않습니다. 로컬 Anvil이 설정된 개발 환경에서만 수락한 ETH 주문의 테스트 토큰 거래 흐름을 시험할 수 있습니다.</p>
+    <div className="section-title"><div><span className="eyebrow">MY DEMO ADS</span><h2>{t('내 데모 광고','My demo ads')}</h2></div><button className="make-ad" onClick={()=>{setEditing(null);setDraft(blank());setFormOpen(current=>!current);}}>{formOpen?t('닫기','Close'):t('광고 만들기','Create ad')}</button></div>
+    <p className="maker-caution">{t('데모 광고는 자산 잔액이나 담보를 확인하지 않습니다.','Demo ads do not verify asset balances or collateral.')}</p>
     {formOpen&&<form className="maker-form" onSubmit={event=>void save(event)}>
-      <div className="maker-form-grid"><label>거래 방향<select value={draft.side} disabled={!!editing} onChange={event=>field('side',event.target.value as Side)}><option value="buy">구매 광고</option><option value="sell">판매 광고</option></select></label><label>자산<select value={draft.asset} disabled={!!editing} onChange={event=>field('asset',event.target.value as Asset)}><option value="ETH">ETH</option><option value="WBTC">WBTC</option></select></label><label>단가 (USDC / {draft.asset})<input inputMode="decimal" required value={draft.price} onChange={event=>field('price',event.target.value)}/></label><label>총 수량 ({draft.asset})<input inputMode="decimal" required value={draft.total} onChange={event=>field('total',event.target.value)}/></label><label>최소 금액 (USDC)<input inputMode="decimal" required value={draft.min} onChange={event=>field('min',event.target.value)}/></label><label>최대 금액 (USDC)<input inputMode="decimal" required value={draft.max} onChange={event=>field('max',event.target.value)}/></label><label>응답 시간 (분)<input type="number" min="5" max="60" required value={draft.minutes} onChange={event=>field('minutes',event.target.value)}/></label><label>광고 유효기간 (시간)<input type="number" min="1" max="168" required value={draft.validHours} onChange={event=>field('validHours',event.target.value)}/></label></div>
-      <button className="primary" disabled={saving} type="submit">{editing?'광고 수정':'데모 광고 등록'}</button>
+      <div className="maker-form-grid"><label>{t('거래 방향','Trade direction')}<select value={draft.side} disabled={!!editing} onChange={event=>field('side',event.target.value as Side)}><option value="buy">{t('구매 광고','Buy ad')}</option><option value="sell">{t('판매 광고','Sell ad')}</option></select></label><label>{t('자산','Asset')}<select value={draft.asset} disabled={!!editing} onChange={event=>field('asset',event.target.value as Asset)}><option value="ETH">ETH</option><option value="WBTC">WBTC</option></select></label><label>{t('단가','Price')} (USDC / {draft.asset})<input inputMode="decimal" required value={draft.price} onChange={event=>field('price',event.target.value)}/></label><label>{t('총 수량','Total amount')} ({draft.asset})<input inputMode="decimal" required value={draft.total} onChange={event=>field('total',event.target.value)}/></label><label>{t('최소 금액','Minimum amount')} (USDC)<input inputMode="decimal" required value={draft.min} onChange={event=>field('min',event.target.value)}/></label><label>{t('최대 금액','Maximum amount')} (USDC)<input inputMode="decimal" required value={draft.max} onChange={event=>field('max',event.target.value)}/></label><label>{t('응답 시간','Response time')} ({t('분','minutes')})<input type="number" min="5" max="60" required value={draft.minutes} onChange={event=>field('minutes',event.target.value)}/></label><label>{t('광고 유효기간','Ad validity')} ({t('시간','hours')})<input type="number" min="1" max="168" required value={draft.validHours} onChange={event=>field('validHours',event.target.value)}/></label></div>
+      <button className="primary" disabled={saving} type="submit">{editing?t('광고 수정','Save ad'):t('데모 광고 등록','Post demo ad')}</button>
     </form>}
-    {loading?<p>내 광고를 불러오는 중입니다.</p>:ads.length?ads.map(ad=><article key={ad.id} className="owned-ad"><div><strong>{ad.side==='buy'?'구매':'판매'} · {ad.asset} · {ad.price} USDC</strong><p>{stateLabel[ad.status||'ACTIVE']} · 가용 {ad.available} / 총 {ad.total} {ad.asset} · 한도 {ad.min}–{ad.max} USDC</p>{ad.expiresAt&&<p>만료 {new Date(ad.expiresAt).toLocaleString('ko-KR')}</p>}</div><div className="owned-actions">{ad.status!=='CLOSED'&&ad.status!=='EXPIRED'&&<button disabled={saving} onClick={()=>beginEdit(ad)}>수정</button>}{ad.status==='ACTIVE'&&<button disabled={saving} onClick={()=>void status(ad,'pause')}>일시중지</button>}{ad.status==='PAUSED'&&<button disabled={saving} onClick={()=>void status(ad,'resume')}>재개</button>}{ad.status!=='CLOSED'&&ad.status!=='EXPIRED'&&<button disabled={saving} onClick={()=>void status(ad,'close')}>종료</button>}</div></article>):<p>등록한 데모 광고가 없습니다.</p>}
+    {loading?<p>{t('내 광고를 불러오는 중입니다.','Loading your ads.')}</p>:ads.length?ads.map(ad=><article key={ad.id} className="owned-ad"><div><strong>{ad.side==='buy'?t('구매','Buy'):t('판매','Sell')} · {ad.asset} · {ad.price} USDC</strong><p>{language==='ko'?stateLabel[ad.status||'ACTIVE']:({ACTIVE:'Active',PAUSED:'Paused',CLOSED:'Closed',EXPIRED:'Expired'}[ad.status||'ACTIVE'])} · {t('가용','Available')} {ad.available} / {t('총','Total')} {ad.total} {ad.asset} · {t('한도','Limit')} {ad.min}–{ad.max} USDC</p>{ad.expiresAt&&<p>{t('만료','Expires')} {new Date(ad.expiresAt).toLocaleString(locale)}</p>}</div><div className="owned-actions">{ad.status!=='CLOSED'&&ad.status!=='EXPIRED'&&<button disabled={saving} onClick={()=>beginEdit(ad)}>{t('수정','Edit')}</button>}{ad.status==='ACTIVE'&&<button disabled={saving} onClick={()=>void status(ad,'pause')}>{t('일시중지','Pause')}</button>}{ad.status==='PAUSED'&&<button disabled={saving} onClick={()=>void status(ad,'resume')}>{t('재개','Resume')}</button>}{ad.status!=='CLOSED'&&ad.status!=='EXPIRED'&&<button disabled={saving} onClick={()=>void status(ad,'close')}>{t('종료','Close')}</button>}</div></article>):<p>{t('등록한 데모 광고가 없습니다.','No ads posted yet.')}</p>}
     <div className="incoming-orders">
-      <div className="incoming-heading"><h3>들어온 데모 예약</h3><button onClick={()=>void load().catch(error=>onNotice(error.message))}>새로고침</button></div>
+      <div className="incoming-heading"><h3>{t('들어온 데모 예약','Incoming reservations')}</h3><button onClick={()=>void load().catch(error=>onNotice(error.message))}>{t('새로고침','Refresh')}</button></div>
       <OrderStatusFilterBar orders={incoming} value={orderFilter} onChange={value=>{setOrderFilter(value);setOpenHistory(null);}}/>
-      {incoming.length===0?<p>들어온 데모 예약이 없습니다.</p>:visibleIncoming.length===0?<p className="order-filter-empty">선택한 상태의 데모 예약이 없습니다.</p>:visibleIncoming.map(order=><div className="incoming-item" key={order.id}>
-        <div className="incoming-main"><div><strong>{order.amount} USDC · {orderStateLabel[order.state]||order.state}</strong><p>거래자 {order.taker.slice(0,6)}…{order.taker.slice(-4)} · 광고 {order.ad_id.slice(0,8)}</p>{(order.state==='RESERVED'||order.state==='ACCEPTED')&&<p>{order.state==='RESERVED'?'응답 기한':'수락 후 종료 기한'} {new Date((order.state==='RESERVED'?order.response_due_at:order.expires_at)||order.expires_at).toLocaleString('ko-KR')}</p>}</div><div className="owned-actions">{order.state==='RESERVED'&&<><button disabled={saving} onClick={()=>void respond(order,'accept')}>수락</button><button disabled={saving} onClick={()=>void respond(order,'decline')}>거절</button></>}<button aria-expanded={openHistory===order.id} onClick={()=>void toggleHistory(order.id)}>상태 이력</button></div></div>
+      {incoming.length===0?<p>{t('들어온 데모 예약이 없습니다.','No incoming reservations.')}</p>:visibleIncoming.length===0?<p className="order-filter-empty">{t('선택한 상태의 데모 예약이 없습니다.','No reservations in this status.')}</p>:visibleIncoming.map(order=><div className="incoming-item" key={order.id}>
+        <div className="incoming-main"><div><strong>{order.amount} USDC · {stateName(order.state,language)}</strong><p>{t('거래자','Trader')} {order.taker.slice(0,8)} · {t('광고','Ad')} {order.ad_id.slice(0,8)}</p>{(order.state==='RESERVED'||order.state==='ACCEPTED')&&<p>{order.state==='RESERVED'?t('응답 기한','Response deadline'):t('수락 후 종료 기한','Reservation deadline')} {new Date((order.state==='RESERVED'?order.response_due_at:order.expires_at)||order.expires_at).toLocaleString(locale)}</p>}</div><div className="owned-actions">{order.state==='RESERVED'&&<><button disabled={saving} onClick={()=>void respond(order,'accept')}>{t('수락','Accept')}</button><button disabled={saving} onClick={()=>void respond(order,'decline')}>{t('거절','Decline')}</button></>}<button aria-expanded={openHistory===order.id} onClick={()=>void toggleHistory(order.id)}>{t('상태 이력','History')}</button></div></div>
         {openHistory===order.id&&<OrderTimeline events={history} wallet={wallet}/>}
         <OrderConversation id={order.id} wallet={wallet}/><OrderSafety id={order.id} onAdsChanged={onMarketChanged}/>
-        {order.state==='ACCEPTED'&&chainEligible(order.terms_json)||['CHAIN_SIGNING','OPEN_PENDING','OPEN','MAKER_FUNDED','SETTLED','REFUNDED','SIGNATURE_EXPIRED'].includes(order.state)?<ChainOrderPanel id={order.id} wallet={wallet} role="maker" onChanged={async()=>{await load();await onMarketChanged();}} onNotice={onNotice}/>:null}
       </div>)}
     </div>
   </section>;

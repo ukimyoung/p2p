@@ -1,6 +1,7 @@
 import 'server-only';
 import { NextRequest } from 'next/server';
 import { InputError, getSession } from './data-store';
+import { memberById } from './email-auth';
 export const SESSION_COOKIE='peer_session';
 export const cookieOptions={httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict' as const,path:'/',maxAge:24*60*60};
 export function sameOrigin(request:NextRequest) {
@@ -17,10 +18,10 @@ export async function jsonBody(request:NextRequest) {
   if(body.length>4096) throw new InputError('요청이 너무 큽니다.',413);
   try {const parsed=JSON.parse(body);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)) throw new Error();return parsed as Record<string,unknown>;} catch {throw new InputError('올바른 JSON 요청이 필요합니다.');}
 }
-export async function authenticatedAddress(request:NextRequest) {
-  const address=await getSession(request.cookies.get(SESSION_COOKIE)?.value);
-  if(!address) throw new InputError('지갑 로그인이 필요합니다.',401);
-  return address;
+export async function authenticatedUserId(request:NextRequest) {
+  const userId=await getSession(request.cookies.get(SESSION_COOKIE)?.value);
+  if(!userId||!await memberById(userId)) throw new InputError('로그인이 필요합니다.',401);
+  return userId;
 }
 export function responseError(error:unknown) {
   if(error instanceof InputError) return Response.json({error:error.message},{status:error.status});

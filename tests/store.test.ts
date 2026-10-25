@@ -220,16 +220,16 @@ test('operator review is allowlisted, one-time, private, and expires with the re
   process.env.P2P_DB_PATH=join(testDir,'moderation.sqlite');
   const maker='0x3333333333333333333333333333333333333333';
   const taker='0x4444444444444444444444444444444444444444';
-  const admin='0x5555555555555555555555555555555555555555';
+  const admin='55555555-5555-4555-8555-555555555555';
   const now=Date.now();
   const ad=store.createAd(maker,{side:'buy',asset:'ETH',price:'2000',total:'1',min:'100',max:'1500',minutes:15,validHours:24});
   const orderId=String(store.reserveOrder(taker,ad.id,'100',key(60),now).id);
   store.postOrderMessage(maker,orderId,'신고 대상 대화 내용입니다.',crypto.randomUUID(),now);
   const report=store.reportOrderCounterparty(taker,orderId,'FRAUD','거래 조건이 일치하지 않습니다.',now);
   assert.throws(()=>moderation.listAdminReports(taker),{status:403});
-  process.env.P2P_ADMIN_ADDRESSES='invalid,'+admin;
+  process.env.P2P_ADMIN_USER_IDS='invalid,'+admin;
   assert.equal(moderation.isReportAdmin(admin),false);
-  process.env.P2P_ADMIN_ADDRESSES=admin;
+  process.env.P2P_ADMIN_USER_IDS=admin;
   assert.equal(moderation.listAdminReports(admin).reports.length,1);
   assert.equal(moderation.getAdminReport(admin,report.id).messages.length,1);
   assert.throws(()=>moderation.getAdminReport(taker,report.id),{status:403});
@@ -248,7 +248,7 @@ test('operator review is allowlisted, one-time, private, and expires with the re
   store.respondOrder(maker,orderId,'decline',now+3);
   assert.deepEqual(store.pruneSensitiveOrderData(now+3+store.reportRetentionMs),{messages:1,reports:1});
   assert.throws(()=>moderation.getAdminReport(admin,report.id),{status:404});
-  delete process.env.P2P_ADMIN_ADDRESSES;
+  delete process.env.P2P_ADMIN_USER_IDS;
 });
 test('existing reports gain review columns without losing submitted content',()=>{
   store.resetStoreForTests();

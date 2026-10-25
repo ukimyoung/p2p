@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
-import { authenticatedAddress } from '../../../../../lib/http';
+import { authenticatedUserId } from '../../../../../lib/http';
+import { memberById } from '../../../../../lib/email-auth';
 export const runtime='nodejs';
 export async function GET(request:NextRequest) {
-  try {return Response.json({address:await authenticatedAddress(request)});}
-  catch {return Response.json({address:null},{status:401});}
+  try {return Response.json({user:await memberById(await authenticatedUserId(request))},{headers:{'Cache-Control':'no-store'}});}
+  catch {return Response.json({user:null},{status:401,headers:{'Cache-Control':'no-store'}});}
 }

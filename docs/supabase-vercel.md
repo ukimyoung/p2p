@@ -1,20 +1,20 @@
 # Supabase PostgreSQL + Vercel 배포
 
-웹 API와 관리자 화면은 Supabase PostgreSQL을 사용한다. Vercel 프로젝트 `p2p`의 프로덕션 주소는 `https://p2p-mu.vercel.app/`이다. Supabase 프로젝트 `dadnogqummcpfwactszh`에는 `supabase/migrations/20261023000100_initial_p2p.sql`을 이미 적용했다. 12개 테이블에 RLS가 켜져 있고 브라우저 역할의 `p2p` 스키마 접근은 허용하지 않았다. 기존 SQLite 개발 데이터는 이전하지 않았으며 새 DB에는 데모 광고가 자동으로 추가되지 않는다.
+Vercel 프로젝트 `p2p`의 프로덕션 주소는 `https://p2p-mu.vercel.app/`, Supabase 프로젝트 ref는 `dadnogqummcpfwactszh`입니다. 다음 DB 마이그레이션이 적용되어야 합니다.
 
-## Vercel 구성
+- `supabase/migrations/20261023000100_initial_p2p.sql`: 광고·주문·세션·신고 데이터
+- `supabase/migrations/20261025000100_member_profiles.sql`: 이메일 인증 회원 프로필
 
-- 이 저장소는 Next.js 앱으로 가져온다. Root Directory는 저장소 루트이며 빌드 명령은 `npm run build`다. Node.js 24를 사용한다.
-- Production 환경 변수 `DATABASE_URL`에 Supabase의 **서버 전용 PostgreSQL 연결 문자열**을 넣는다. Vercel의 여러 함수 인스턴스가 같은 DB를 사용해야 하므로 서버리스 연결에 적합한 Supabase 풀러를 사용한다. 브라우저 공개 키나 Supabase 서비스 역할 키로 대체하지 않는다. Supabase 호스트 연결은 공식 Supabase 생산 환경 루트 CA(2021·2025)와 서버 호스트명으로 TLS 인증서를 검증하며, Vercel에서는 함수 인스턴스당 PostgreSQL 풀 연결을 기본 1개로 제한한다.
-- Production 환경 변수 `CRON_SECRET`에 추측하기 어려운 임의 값을 넣는다. Vercel Cron은 이 값을 `Authorization: Bearer ...` 헤더로 보내며, 두 작업 경로는 값이 없거나 일치하지 않으면 실행하지 않는다. 토큰과 연결 문자열을 Git이나 채팅에 넣지 않는다.
-- `P2P_ADMIN_ADDRESSES`는 관리자 신고 화면을 사용할 때만 웹 서비스에 설정한다. `P2P_REQUIRE_POSTGRES`는 Vercel에서 자동으로 적용되며, `DATABASE_URL`이 빠지면 SQLite 파일로 전환하지 않고 실패한다.
-- Vercel Cron은 상시 실행 프로세스가 아니다. `/api/cron/expire`가 예약·광고 만료를, `/api/cron/retention`이 오래된 대화·신고 내용을 정리한다. `vercel.json`은 Hobby에서도 배포할 수 있도록 두 작업을 각각 매일 03:00·03:05 UTC(한국 시간 12:00·12:05)에 예약한다. Hobby의 실제 호출 시각은 해당 시간대 안에서 달라질 수 있다. 만료 처리는 사용자 요청에서도 즉시 수행되지만, 접속이 없는 동안 DB 상태 갱신은 다음 일일 Cron까지 지연될 수 있다. 짧은 주기의 무요청 만료가 필요하면 Vercel Pro의 Cron 빈도 제한과 비용을 확인한 뒤 만료 작업을 1분 주기로 바꾼다.
+Vercel Production 환경 변수는 다음과 같습니다.
 
-## 배포와 확인
+- `DATABASE_URL`: Supabase 서버 전용 PostgreSQL 풀러 연결 문자열. 브라우저에 노출하지 않습니다.
+- `SUPABASE_PUBLISHABLE_KEY`: Supabase의 공개 API 키. 회원가입·로그인 요청에 사용합니다.
+- `SUPABASE_URL`: 기본값은 이 프로젝트 URL이지만 명시적으로 설정할 수 있습니다.
+- `CRON_SECRET`: Vercel Cron 인증용 무작위 값.
+- `P2P_ADMIN_USER_IDS`: 신고 검토 운영자 계정의 Supabase Auth UUID 목록. 필요한 경우에만 쉼표로 구분해 설정합니다. 지갑 주소는 허용하지 않습니다.
 
-1. Vercel에 GitHub 저장소 `ukimyoung/p2p`를 연결하고 Production 환경 변수 `DATABASE_URL`, `CRON_SECRET`을 입력한다. `vercel.json`은 함수 지역을 Supabase 프로젝트의 `ap-southeast-2`와 같은 Sydney(`syd1`)로 지정한다.
-2. 배포 후 `https://<프로덕션 주소>/api/health`가 200과 `{"ok":true}`를 반환하는지 확인한다. 이 응답은 DB 연결과 `p2p.ads` 존재를 확인한다.
-3. Cron 경로를 인증 없이 호출하면 401이어야 한다. Vercel의 Cron 실행 로그에서 두 작업이 200으로 끝나는지 확인한다. 예약 만료 작업은 여러 호출이 겹쳐도 PostgreSQL 트랜잭션을 통해 재고를 한 번만 복구한다.
-4. 브라우저에서 광고 목록, 지갑 로그인, 광고 등록·예약·수락·만료를 실제 배포 주소로 점검한다. 로컬 Anvil 31337 체인 경로는 Vercel 배포 대상이 아니다.
+Supabase Auth에서 이메일 가입을 켜고 **Confirm email**을 유지합니다. `Site URL`은 `https://p2p-mu.vercel.app`, Redirect URLs에는 `https://p2p-mu.vercel.app/auth/confirm`을 등록합니다. 로컬 개발에는 `http://localhost:3000/auth/confirm`도 허용할 수 있습니다. 가입 시 Supabase Auth가 확인 메일을 보내고, 인증 링크를 클릭하면 앱의 `/auth/confirm` 화면이 토큰을 확인한 뒤 앱 세션을 만듭니다. SMS 인증은 사용하지 않습니다. Supabase의 기본 이메일 서비스는 외부 수신자 전송이 제한되므로 공개 가입에는 **Auth → SMTP Settings**에서 커스텀 SMTP 서버를 설정해야 합니다. 비밀번호와 SMTP 인증 정보는 채팅이나 저장소에 넣지 않습니다.
 
-2026-10-25 배포 검증에서 프로덕션 `/api/health`와 광고 조회 API가 HTTP 200을 반환했다. 임시 테스트 지갑의 SIWE 요청·서명 검증·세션 조회·로그아웃이 성공했고, 로그아웃한 세션은 HTTP 401로 거부됐다. 임시 광고·주문으로 예약 중복 방지, 수락, 취소, 재고 복구와 광고 종료를 확인한 뒤 관련 테스트 데이터와 세션을 삭제했다. 공개 광고 목록은 다시 비어 있다. 인증 없는 두 Cron 경로는 HTTP 401을 반환했고, Vercel 배포 설정에 두 일정과 Sydney 지역이 반영됐다. 실제 예약 시각의 Cron 자동 실행은 아직 관찰하지 않았다. Codex 실행 환경의 PostgreSQL 직접 DNS 조회는 `EAI_AGAIN`으로 실패하지만, Vercel 함수에서는 공식 Supabase 루트 CA를 사용한 TLS 검증과 DB 조회가 성공했다.
+`vercel.json`은 Sydney(`syd1`) 함수 지역과 Vercel Hobby에 맞춘 일일 Cron을 설정합니다. `/api/cron/expire`는 예약·광고 만료를, `/api/cron/retention`은 오래된 대화·신고 내용을 정리합니다. Hobby의 Cron은 하루 한 번 실행될 수 있으므로 접속이 없는 동안 만료 DB 상태 갱신이 늦어질 수 있습니다. 사용자 요청에서도 만료 처리를 실행합니다.
+
+배포 후 `/api/health`가 200인지, 로그인 전 GNB에 P2P 마켓과 광고등록만 표시되는지, 한국어/English 전환이 되는지 확인합니다. 이메일 가입, 미인증 로그인 거부, 인증 링크 사용, 광고 등록·예약도 SMTP를 설정한 후 실제 주소에서 점검합니다.

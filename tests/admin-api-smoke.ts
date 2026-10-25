@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { privateKeyToAccount } from 'viem/accounts';
-
+import { randomUUID } from 'node:crypto';
+import { createSession } from '../lib/store-pg';
+import { query } from '../lib/postgres';
 const base=process.env.P2P_TEST_BASE_URL||'http://localhost:3012';
-const operator=privateKeyToAccount(`0x${'1'.padStart(64,'0')}`);
-const maker=privateKeyToAccount(`0x${'2'.padStart(64,'0')}`);
-const taker=privateKeyToAccount(`0x${'3'.padStart(64,'0')}`);
+const operator={id:'11111111-1111-4111-8111-111111111111'};
+const maker={id:'22222222-2222-4222-8222-222222222222'};
+const taker={id:'33333333-3333-4333-8333-333333333333'};
 const post=(path:string,body:unknown,cookie?:string,origin=base)=>fetch(base+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)});
 const get=(path:string,cookie?:string)=>fetch(base+path,{headers:cookie?{Cookie:cookie}:{}});
 async function checked(response:Response,status=200) {
@@ -12,14 +13,9 @@ async function checked(response:Response,status=200) {
   assert.equal(response.status,status,JSON.stringify(data));
   return data;
 }
-async function login(account:typeof operator) {
-  const challenge=await checked(await post('/api/v1/auth/challenge',{address:account.address,chainId:11155111}));
-  const signature=await account.signMessage({message:challenge.message});
-  const response=await post('/api/v1/auth/verify',{message:challenge.message,signature});
-  await checked(response);
-  const cookie=response.headers.get('set-cookie')?.split(';')[0];
-  assert.ok(cookie);
-  return cookie;
+async function login(account:{id:string}) {
+  await query('INSERT INTO p2p.member_profiles (user_id,email,country_code,phone_e164,email_verified_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[account.id,`${account.id}@example.test`,'KR','+821012345678',Date.now()]);
+  return `peer_session=${await createSession(account.id)}`;
 }
 async function main() {
   const adminCookie=await login(operator);
@@ -52,7 +48,7 @@ async function main() {
   assert.equal((await post(detail,{decision:'CONFIRMED',note:'짧음'},adminCookie)).status,400);
   const reviewed=(await checked(await post(detail,{decision:'CONFIRMED',note},adminCookie))).report;
   assert.equal(reviewed.status,'CONFIRMED');
-  assert.equal(reviewed.reviewed_by,operator.address.toLowerCase());
+  assert.equal(reviewed.reviewed_by,operator.id);
   assert.equal((await checked(await post(detail,{decision:'CONFIRMED',note},adminCookie))).report.reviewed_at,reviewed.reviewed_at);
   assert.equal((await post(detail,{decision:'DISMISSED',note},adminCookie)).status,409);
   assert.equal((await checked(await get(list,adminCookie))).reports.length,0);
