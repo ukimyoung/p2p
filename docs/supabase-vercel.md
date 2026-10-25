@@ -1,6 +1,6 @@
 # Supabase PostgreSQL + Vercel 배포
 
-웹 API와 관리자 화면은 Supabase PostgreSQL을 사용한다. 프로젝트 `dadnogqummcpfwactszh`에는 `supabase/migrations/20261023000100_initial_p2p.sql`을 이미 적용했다. 12개 테이블에 RLS가 켜져 있고 브라우저 역할의 `p2p` 스키마 접근은 허용하지 않았다. 기존 SQLite 개발 데이터는 이전하지 않았으며 새 DB에는 데모 광고가 자동으로 추가되지 않는다.
+웹 API와 관리자 화면은 Supabase PostgreSQL을 사용한다. Vercel 프로젝트 `p2p`의 프로덕션 주소는 `https://p2p-mu.vercel.app/`이다. Supabase 프로젝트 `dadnogqummcpfwactszh`에는 `supabase/migrations/20261023000100_initial_p2p.sql`을 이미 적용했다. 12개 테이블에 RLS가 켜져 있고 브라우저 역할의 `p2p` 스키마 접근은 허용하지 않았다. 기존 SQLite 개발 데이터는 이전하지 않았으며 새 DB에는 데모 광고가 자동으로 추가되지 않는다.
 
 ## Vercel 구성
 
@@ -17,4 +17,4 @@
 3. Cron 경로를 인증 없이 호출하면 401이어야 한다. Vercel의 Cron 실행 로그에서 두 작업이 200으로 끝나는지 확인한다. 예약 만료 작업은 여러 호출이 겹쳐도 PostgreSQL 트랜잭션을 통해 재고를 한 번만 복구한다.
 4. 브라우저에서 광고 목록, 지갑 로그인, 광고 등록·예약·수락·만료를 실제 배포 주소로 점검한다. 로컬 Anvil 31337 체인 경로는 Vercel 배포 대상이 아니다.
 
-현재 Codex 실행 환경은 Supabase PostgreSQL 호스트의 직접 DNS 조회가 `EAI_AGAIN`으로 실패한다. 스키마는 Supabase Management API로 확인했지만 Vercel 배포 후의 앱 연결·Cron 실행은 아직 검증하지 않았다.
+2026-10-25 배포 검증에서 프로덕션 `/api/health`와 광고 조회 API가 HTTP 200을 반환했다. 신규 PostgreSQL DB의 광고 목록은 비어 있다. 인증 없는 두 Cron 경로는 모두 HTTP 401을 반환했고, Vercel 배포 설정에 두 일정과 Sydney 지역이 반영됐다. 실제 예약 시각의 Cron 실행과 배포 주소에서의 지갑·주문 흐름은 아직 검증하지 않았다. Codex 실행 환경의 PostgreSQL 직접 DNS 조회는 `EAI_AGAIN`으로 실패하지만, Vercel 함수에서는 공식 Supabase 루트 CA를 사용한 TLS 검증과 DB 조회가 성공했다.
